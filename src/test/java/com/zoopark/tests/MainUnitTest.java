@@ -85,7 +85,6 @@ class MainUnitTest {
 
     @Test
     void testShowAnimalCount() throws Exception {
-        // Arrange
         when(zooService.getAnimalCount()).thenReturn(5);
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         System.setOut(new PrintStream(outputStream));
@@ -146,7 +145,6 @@ class MainUnitTest {
 
     @Test
     void testShowContactZooAnimalsEmpty() throws Exception {
-        // Arrange
         when(contactZooService.getAnimalsForContactZoo()).thenReturn(List.of());
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         System.setOut(new PrintStream(outputStream));

@@ -11,8 +11,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
 
 @ExtendWith(MockitoExtension.class)
 class InventoryServiceTest {
@@ -21,12 +21,21 @@ class InventoryServiceTest {
     private VeterinaryClinic veterinaryClinic;
 
     @Test
-    void testPrintInventoryReport() {
-        ZooService zooService = new ZooService(veterinaryClinic);
-        InventoryService inventoryService = new InventoryService(zooService);
+    void testInventoryServiceCreation() {
+        InventoryService inventoryService = new InventoryService(new ZooService(veterinaryClinic));
+        assertNotNull(inventoryService);
+    }
 
-        // Act & Assert - проверяем что метод не выбрасывает исключений
-        assertDoesNotThrow(() -> inventoryService.printInventoryReport());
+    @Test
+    void testPrintInventoryReport_NoExceptions() {
+        InventoryService inventoryService = new InventoryService(new ZooService(veterinaryClinic));
+        assertDoesNotThrow(inventoryService::printInventoryReport);
+    }
+
+    @Test
+    void testEmptyInventoryReport() {
+        InventoryService inventoryService = new InventoryService(new ZooService(veterinaryClinic));
+        assertDoesNotThrow(inventoryService::printInventoryReport);
     }
 
     @Test
@@ -35,48 +44,23 @@ class InventoryServiceTest {
         ZooService zooService = new ZooService(veterinaryClinic);
         InventoryService inventoryService = new InventoryService(zooService);
 
-        Monkey monkey = new Monkey("Тестовый", 2, 6);
-        zooService.addAnimal(monkey);
-        zooService.addThing(new Table("Тестовый стол"));
+        zooService.addAnimal(new Monkey("Тест", 2, 6));
+        zooService.addThing(new Table("Стол"));
 
-        int inventorySize = zooService.getInventory().size();
-        assertTrue(inventorySize >= 2, "Инвентарь должен содержать как минимум животное и вещь. Текущий размер: " + inventorySize);
+        assertTrue(zooService.getInventory().size() >= 2);
     }
 
     @Test
     void testInventoryAfterAnimalRejection() {
-        // Arrange - настраиваем мок чтобы животное НЕ проходило проверку здоровья
         when(veterinaryClinic.checkHealth(any())).thenReturn(false);
         ZooService zooService = new ZooService(veterinaryClinic);
         InventoryService inventoryService = new InventoryService(zooService);
 
-        // Act - пытаемся добавить животное (оно должно быть отклонено)
         int initialSize = zooService.getInventory().size();
-        Monkey monkey = new Monkey("Больной", 2, 6);
-        zooService.addAnimal(monkey);
-        zooService.addThing(new Table("Тестовый стол"));
 
-        // Assert - животное не добавилось, но вещь добавилась
-        int newSize = zooService.getInventory().size();
-        assertEquals(initialSize + 1, newSize, "Должна добавиться только вещь, но не животное");
-    }
+        zooService.addAnimal(new Monkey("Больной", 2, 6));
+        zooService.addThing(new Table("Стол"));
 
-    @Test
-    void testInventoryServiceCreation() {
-        ZooService zooService = new ZooService(veterinaryClinic);
-
-        InventoryService inventoryService = new InventoryService(zooService);
-
-        assertNotNull(inventoryService, "InventoryService должен создаваться успешно");
-    }
-
-    @Test
-    void testEmptyInventoryReport() {
-        ZooService zooService = new ZooService(veterinaryClinic);
-        InventoryService inventoryService = new InventoryService(zooService);
-
-        // Act & Assert - проверяем что метод работает даже с пустым инвентарем
-        assertDoesNotThrow(() -> inventoryService.printInventoryReport(),
-                "Метод printInventoryReport должен работать с пустым инвентарем");
+        assertEquals(initialSize + 1, zooService.getInventory().size());
     }
 }
