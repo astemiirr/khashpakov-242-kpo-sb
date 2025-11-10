@@ -46,3 +46,7 @@ jar {
 
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
+
+run {
+    standardInput = System.in
+}
