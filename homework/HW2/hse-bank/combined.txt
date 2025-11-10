@@ -1,0 +1,1025 @@
+package ru.hse.bank;
+
+import ru.hse.bank.command.Command;
+import ru.hse.bank.command.CreateBankAccountCommand;
+import ru.hse.bank.command.TimingDecorator;
+import ru.hse.bank.di.DIContainer;
+import ru.hse.bank.domain.BankAccount;
+import ru.hse.bank.domain.ObservableBankAccount;
+import ru.hse.bank.exporter.DataVisitor;
+import ru.hse.bank.exporter.JsonExportVisitor;
+import ru.hse.bank.facade.BankAccountFacade;
+import ru.hse.bank.factory.DomainFactory;
+import ru.hse.bank.importer.DataImporter;
+import ru.hse.bank.importer.JsonDataImporter;
+import ru.hse.bank.importer.XmlDataImporter;
+import ru.hse.bank.observer.LowBalanceObserver;
+
+import java.util.Optional;
+import java.util.Scanner;
+
+public class Application {
+    private static BankAccountFacade accountFacade;
+    private static DomainFactory factory;
+    private static final Scanner scanner = new Scanner(System.in);
+
+    public static void main(String[] args) {
+        // Инициализация DI контейнера
+        DIContainer container = new DIContainer();
+        accountFacade = container.getBean(BankAccountFacade.class);
+        factory = container.getBean(DomainFactory.class);
+
+        System.out.println("=== HSE Bank Finance Tracker ===\n");
+
+        boolean running = true;
+        while (running) {
+            showMainMenu();
+            int choice = getIntInput();
+
+            switch (choice) {
+                case 1:
+                    demonstratePatterns();
+                    break;
+                case 2:
+                    createAccountInteractive();
+                    break;
+                case 3:
+                    depositInteractive();
+                    break;
+                case 4:
+                    withdrawInteractive();
+                    break;
+                case 5:
+                    showAllAccounts();
+                    break;
+                case 6:
+                    exportDataInteractive();
+                    break;
+                case 7:
+                    showAccountDetails();
+                    break;
+                case 8:
+                    deleteAccountInteractive();
+                    break;
+                case 9:
+                    demonstrateObserver();
+                    break;
+                case 10:
+                    importFromJson();
+                    break;
+                case 11:
+                    importFromXml();
+                    break;
+                case 0:
+                    running = false;
+                    System.out.println("До свидания!");
+                    break;
+                default:
+                    System.out.println("Неверный выбор. Попробуйте снова.");
+            }
+            System.out.println();
+        }
+        scanner.close();
+    }
+
+    private static void showMainMenu() {
+        System.out.println("=== Главное меню ===");
+        System.out.println("1. Демонстрация всех паттернов");
+        System.out.println("2. Создать новый счет");
+        System.out.println("3. Пополнить счет");
+        System.out.println("4. Снять со счета");
+        System.out.println("5. Показать все счета");
+        System.out.println("6. Экспорт данных");
+        System.out.println("7. Показать детали счета");
+        System.out.println("8. Удалить счет");
+        System.out.println("9. Демонстрация Наблюдателя");
+        System.out.println("10. Импорт из JSON");
+        System.out.println("11. Импорт из XML");
+        System.out.println("0. Выйти");
+    }
+
+    private static void demonstratePatterns() {
+        System.out.println("\n--- Демонстрация всех паттернов ---");
+
+        // 1. Фасад + Команда + Декоратор
+        System.out.println("1. Фасад + Команда + Декоратор:");
+        Command createAccountCommand = new CreateBankAccountCommand(
+                accountFacade, "Демо-счет", 1000.0
+        );
+        Command timedCommand = new TimingDecorator(createAccountCommand);
+        timedCommand.execute();
+
+        // 2. Наблюдатель
+        System.out.println("\n2. Наблюдатель:");
+        demonstrateObserver();
+
+        // 3. Посетитель для экспорта
+        System.out.println("\n3. Посетитель для экспорта:");
+        exportDataInteractive();
+
+        System.out.println("--- Демонстрация завершена ---");
+    }
+
+    private static void createAccountInteractive() {
+        System.out.println("\n--- Создание нового счета ---");
+        System.out.print("Введите название счета: ");
+        String name = scanner.nextLine();
+
+        double balance = getDoubleInput("Введите начальный баланс: ");
+
+        try {
+            Command command = new CreateBankAccountCommand(accountFacade, name, balance);
+            Command timedCommand = new TimingDecorator(command);
+            timedCommand.execute();
+        } catch (IllegalArgumentException e) {
+            System.out.println("Ошибка: " + e.getMessage());
+        }
+    }
+
+    private static void depositInteractive() {
+        System.out.println("\n--- Пополнение счета ---");
+        Long accountId = getLongInput("Введите ID счета: ");
+        double amount = getDoubleInput("Введите сумму для пополнения: ");
+
+        try {
+            accountFacade.deposit(accountId, amount);
+            System.out.println("Счет успешно пополнен!");
+            showAccountBalance(accountId);
+        } catch (Exception e) {
+            System.out.println("Ошибка: " + e.getMessage());
+        }
+    }
+
+    private static void withdrawInteractive() {
+        System.out.println("\n--- Снятие со счета ---");
+        Long accountId = getLongInput("Введите ID счета: ");
+        double amount = getDoubleInput("Введите сумму для снятия: ");
+
+        try {
+            accountFacade.withdraw(accountId, amount);
+            System.out.println("Снятие выполнено успешно!");
+            showAccountBalance(accountId);
+        } catch (Exception e) {
+            System.out.println("Ошибка: " + e.getMessage());
+        }
+    }
+
+    private static void showAllAccounts() {
+        System.out.println("\n--- Все счета ---");
+        var accounts = accountFacade.getAllAccounts();
+        if (accounts.isEmpty()) {
+            System.out.println("Счетов нет");
+        } else {
+            accounts.forEach(account ->
+                    System.out.printf("ID: %d | Имя: %-15s | Баланс: %10.2f%n",
+                            account.getId(), account.getName(), account.getBalance())
+            );
+        }
+    }
+
+    private static void exportDataInteractive() {
+        System.out.println("\n--- Экспорт данных ---");
+        DataVisitor exporter = new JsonExportVisitor();
+        accountFacade.getAllAccounts().forEach(exporter::visit);
+        System.out.println("Экспортированные данные в JSON:");
+        System.out.println(exporter.getResult());
+    }
+
+    private static void showAccountDetails() {
+        System.out.println("\n--- Детали счета ---");
+        Long accountId = getLongInput("Введите ID счета: ");
+
+        Optional<BankAccount> account = accountFacade.getAccount(accountId);
+        if (account.isPresent()) {
+            BankAccount acc = account.get();
+            System.out.printf("Детали счета:%n");
+            System.out.printf("ID: %d%n", acc.getId());
+            System.out.printf("Название: %s%n", acc.getName());
+            System.out.printf("Баланс: %.2f%n", acc.getBalance());
+        } else {
+            System.out.println("Счет с ID " + accountId + " не найден");
+        }
+    }
+
+    private static void deleteAccountInteractive() {
+        System.out.println("\n--- Удаление счета ---");
+        Long accountId = getLongInput("Введите ID счета для удаления: ");
+
+        // Сначала проверим существование счета
+        Optional<BankAccount> account = accountFacade.getAccount(accountId);
+        if (account.isPresent()) {
+            BankAccount acc = account.get();
+            System.out.printf("Вы собираетесь удалить счет:%n");
+            System.out.printf("ID: %d, Название: %s, Баланс: %.2f%n",
+                    acc.getId(), acc.getName(), acc.getBalance());
+
+            System.out.print("Вы уверены? (y/n): ");
+            String confirmation = scanner.nextLine().trim().toLowerCase();
+
+            if (confirmation.equals("y") || confirmation.equals("yes") || confirmation.equals("да")) {
+                try {
+                    accountFacade.deleteAccount(accountId);
+                    System.out.println("Счет успешно удален!");
+                } catch (Exception e) {
+                    System.out.println("Ошибка при удалении счета: " + e.getMessage());
+                }
+            } else {
+                System.out.println("Удаление отменено.");
+            }
+        } else {
+            System.out.println("Счет с ID " + accountId + " не найден");
+        }
+    }
+
+    private static void demonstrateObserver() {
+        System.out.println("\n--- Демонстрация Наблюдателя ---");
+
+        System.out.print("Введите название наблюдаемого счета: ");
+        String name = scanner.nextLine();
+        double initialBalance = getDoubleInput("Введите начальный баланс: ");
+        double threshold = getDoubleInput("Введите порог для уведомления: ");
+
+        try {
+            ObservableBankAccount observableAccount =
+                    (ObservableBankAccount) factory.createObservableBankAccount(name, initialBalance);
+            observableAccount.addObserver(new LowBalanceObserver(threshold));
+
+            System.out.println("\nСимуляция операций:");
+
+            double depositAmount = getDoubleInput("Введите сумму для пополнения: ");
+            System.out.println("Пополнение счета на " + depositAmount + "...");
+            observableAccount.deposit(depositAmount);
+
+            double withdrawAmount = getDoubleInput("Введите сумму для снятия: ");
+            System.out.println("Списание " + withdrawAmount + "...");
+            observableAccount.withdraw(withdrawAmount);
+
+            System.out.printf("Итоговый баланс: %.2f%n", observableAccount.getBalance());
+
+        } catch (Exception e) {
+            System.out.println("Ошибка: " + e.getMessage());
+        }
+    }
+
+    private static void showAccountBalance(Long accountId) {
+        accountFacade.getAccount(accountId).ifPresent(account ->
+                System.out.printf("Текущий баланс счета '%s': %.2f%n",
+                        account.getName(), account.getBalance())
+        );
+    }
+
+    // Вспомогательные методы для ввода
+    private static int getIntInput() {
+        System.out.print("Выберите опцию: ");
+        while (!scanner.hasNextInt()) {
+            System.out.println("Пожалуйста, введите целое число.");
+            System.out.print("Выберите опцию: ");
+            scanner.next();
+        }
+        int value = scanner.nextInt();
+        scanner.nextLine();
+        return value;
+    }
+
+    private static long getLongInput(String prompt) {
+        System.out.print(prompt);
+        while (!scanner.hasNextLong()) {
+            System.out.println("Пожалуйста, введите целое число.");
+            System.out.print(prompt);
+            scanner.next();
+        }
+        long value = scanner.nextLong();
+        scanner.nextLine();
+        return value;
+    }
+
+    private static double getDoubleInput(String prompt) {
+        System.out.print(prompt);
+        while (!scanner.hasNextDouble()) {
+            System.out.println("Пожалуйста, введите число.");
+            System.out.print(prompt);
+            scanner.next();
+        }
+        double value = scanner.nextDouble();
+        scanner.nextLine();
+        return value;
+    }
+
+    private static void importFromJson() {
+        System.out.println("\n--- Импорт из JSON ---");
+        System.out.print("Введите путь к JSON файлу: ");
+        String filePath = scanner.nextLine();
+
+        DataImporter importer = new JsonDataImporter();
+        importer.importData(filePath);
+        System.out.println("Импорт из JSON завершен!");
+    }
+
+    private static void importFromXml() {
+        System.out.println("\n--- Импорт из XML ---");
+        System.out.print("Введите путь к XML файлу: ");
+        String filePath = scanner.nextLine();
+
+        DataImporter importer = new XmlDataImporter();
+        importer.importData(filePath);
+        System.out.println("Импорт из XML завершен!");
+    }
+}package ru.hse.bank.repository;
+
+import java.util.*;
+
+public abstract class InMemoryRepository<T, ID> implements Repository<T, ID> {
+    protected final Map<ID, T> storage = new HashMap<>();
+    
+    @Override
+    public T save(T entity) {
+        ID id = getId(entity);
+        storage.put(id, entity);
+        return entity;
+    }
+    
+    @Override
+    public Optional<T> findById(ID id) {
+        return Optional.ofNullable(storage.get(id));
+    }
+    
+    @Override
+    public List<T> findAll() {
+        return new ArrayList<>(storage.values());
+    }
+    
+    @Override
+    public void delete(ID id) {
+        storage.remove(id);
+    }
+    
+    @Override
+    public boolean existsById(ID id) {
+        return storage.containsKey(id);
+    }
+    
+    protected abstract ID getId(T entity);
+}package ru.hse.bank.repository;
+
+import java.util.List;
+import java.util.Optional;
+
+public interface Repository<T, ID> {
+    T save(T entity);
+    Optional<T> findById(ID id);
+    List<T> findAll();
+    void delete(ID id);
+    boolean existsById(ID id);
+}package ru.hse.bank.repository;
+
+import ru.hse.bank.domain.BankAccount;
+
+import java.util.List;
+import java.util.Optional;
+
+public class BankAccountRepository implements Repository<BankAccount, Long> {
+    private final Repository<BankAccount, Long> realRepository;
+    
+    // Proxy: кэшируем данные в памяти для быстрого доступа
+    public BankAccountRepository(Repository<BankAccount, Long> realRepository) {
+        this.realRepository = realRepository;
+    }
+    
+    @Override
+    public BankAccount save(BankAccount account) {
+        // В реальном приложении здесь была бы синхронизация с БД
+        return realRepository.save(account);
+    }
+    
+    @Override
+    public Optional<BankAccount> findById(Long id) {
+        // Proxy: сначала ищем в кэше, потом в реальном хранилище
+        return realRepository.findById(id);
+    }
+    
+    @Override
+    public List<BankAccount> findAll() {
+        return realRepository.findAll();
+    }
+    
+    @Override
+    public void delete(Long id) {
+        realRepository.delete(id);
+    }
+    
+    @Override
+    public boolean existsById(Long id) {
+        return realRepository.existsById(id);
+    }
+}package ru.hse.bank.repository;
+
+import ru.hse.bank.domain.BankAccount;
+
+public class BankAccountRepositoryImpl extends InMemoryRepository<BankAccount, Long> {
+    @Override
+    protected Long getId(BankAccount entity) {
+        return entity.getId();
+    }
+}package ru.hse.bank.importer;
+
+import ru.hse.bank.domain.BankAccount;
+import ru.hse.bank.domain.Category;
+import ru.hse.bank.domain.Operation;
+
+import java.util.List;
+
+public class JsonDataImporter extends DataImporter {
+
+    @Override
+    protected String readFile(String filePath) {
+        System.out.println("Чтение JSON файла: " + filePath);
+        // В реальном приложении здесь был бы код для чтения файла
+        return "{\"accounts\": [], \"categories\": [], \"operations\": []}";
+    }
+
+    @Override
+    protected List<BankAccount> parseAccounts(String content) {
+        System.out.println("Парсинг JSON данных счетов...");
+        // ... здесь был бы парсинг JSON
+        // Например, с использованием Jackson ObjectMapper
+        return List.of();
+    }
+
+    @Override
+    protected List<Category> parseCategories(String content) {
+        System.out.println("Парсинг JSON данных категорий...");
+        // ... здесь был бы парсинг JSON
+        return List.of();
+    }
+
+    @Override
+    protected List<Operation> parseOperations(String content) {
+        System.out.println("Парсинг JSON данных операций...");
+        // ... здесь был бы парсинг JSON
+        return List.of();
+    }
+
+    @Override
+    protected void saveAccounts(List<BankAccount> accounts) {
+        System.out.println("Сохранение счетов из JSON...");
+        super.saveAccounts(accounts);
+    }
+
+    @Override
+    protected void saveCategories(List<Category> categories) {
+        System.out.println("Сохранение категорий из JSON...");
+        super.saveCategories(categories);
+    }
+
+    @Override
+    protected void saveOperations(List<Operation> operations) {
+        System.out.println("Сохранение операций из JSON...");
+        super.saveOperations(operations);
+    }
+}package ru.hse.bank.importer;
+
+import ru.hse.bank.domain.BankAccount;
+import ru.hse.bank.domain.Category;
+import ru.hse.bank.domain.Operation;
+
+import java.util.List;
+
+public abstract class DataImporter {
+    // Шаблонный метод
+    public final void importData(String filePath) {
+        String content = readFile(filePath);
+        List<BankAccount> accounts = parseAccounts(content);
+        List<Category> categories = parseCategories(content);
+        List<Operation> operations = parseOperations(content);
+        
+        saveAccounts(accounts);
+        saveCategories(categories);
+        saveOperations(operations);
+        
+        System.out.println("Импорт завершен: " + accounts.size() + " счетов, " +
+                          categories.size() + " категорий, " + operations.size() + " операций");
+    }
+    
+    protected abstract String readFile(String filePath);
+    protected abstract List<BankAccount> parseAccounts(String content);
+    protected abstract List<Category> parseCategories(String content);
+    protected abstract List<Operation> parseOperations(String content);
+    
+    protected void saveAccounts(List<BankAccount> accounts) {
+        // В реальном приложении здесь должно быть сохранение в репозиторий
+        System.out.println("Сохранение счетов...");
+    }
+    
+    protected void saveCategories(List<Category> categories) {
+        System.out.println("Сохранение категорий...");
+    }
+    
+    protected void saveOperations(List<Operation> operations) {
+        System.out.println("Сохранение операций...");
+    }
+}package ru.hse.bank.importer;
+
+import ru.hse.bank.domain.BankAccount;
+import ru.hse.bank.domain.Category;
+import ru.hse.bank.domain.Operation;
+
+import java.util.List;
+
+public class XmlDataImporter extends DataImporter {
+
+    @Override
+    protected String readFile(String filePath) {
+        System.out.println("Чтение XML файла: " + filePath);
+        // ... здесь был бы код для чтения XML файла
+        return "<?xml version=\"1.0\"?><data><accounts/><categories/><operations/></data>";
+    }
+
+    @Override
+    protected List<BankAccount> parseAccounts(String content) {
+        System.out.println("Парсинг XML данных счетов...");
+        // ... здесь был бы парсинг XML
+        return List.of();
+    }
+
+    @Override
+    protected List<Category> parseCategories(String content) {
+        System.out.println("Парсинг XML данных категорий...");
+        // ... здесь был бы парсинг XML
+        return List.of();
+    }
+
+    @Override
+    protected List<Operation> parseOperations(String content) {
+        System.out.println("Парсинг XML данных операций...");
+        // ... здесь был бы парсинг XML
+        return List.of();
+    }
+
+    @Override
+    protected void saveAccounts(List<BankAccount> accounts) {
+        System.out.println("Сохранение счетов из XML...");
+        super.saveAccounts(accounts);
+    }
+
+    @Override
+    protected void saveCategories(List<Category> categories) {
+        System.out.println("Сохранение категорий из XML...");
+        super.saveCategories(categories);
+    }
+
+    @Override
+    protected void saveOperations(List<Operation> operations) {
+        System.out.println("Сохранение операций из XML...");
+        super.saveOperations(operations);
+    }
+}package ru.hse.bank.facade;
+
+import ru.hse.bank.domain.BankAccount;
+import ru.hse.bank.factory.DomainFactory;
+import ru.hse.bank.repository.BankAccountRepository;
+
+import java.util.List;
+import java.util.Optional;
+
+public class BankAccountFacade {
+    private final BankAccountRepository repository;
+    private final DomainFactory factory;
+    
+    public BankAccountFacade(BankAccountRepository repository, DomainFactory factory) {
+        this.repository = repository;
+        this.factory = factory;
+    }
+    
+    public BankAccount createAccount(String name, double initialBalance) {
+        BankAccount account = factory.createBankAccount(name, initialBalance);
+        return repository.save(account);
+    }
+    
+    public Optional<BankAccount> getAccount(Long id) {
+        return repository.findById(id);
+    }
+    
+    public List<BankAccount> getAllAccounts() {
+        return repository.findAll();
+    }
+    
+    public void updateAccountName(Long id, String newName) {
+        Optional<BankAccount> accountOpt = repository.findById(id);
+        if (accountOpt.isPresent()) {
+            BankAccount account = accountOpt.get();
+            account.setName(newName);
+            repository.save(account);
+        }
+    }
+    
+    public void deleteAccount(Long id) {
+        repository.delete(id);
+    }
+    
+    public void deposit(Long accountId, double amount) {
+        Optional<BankAccount> accountOpt = repository.findById(accountId);
+        if (accountOpt.isPresent()) {
+            BankAccount account = accountOpt.get();
+            account.deposit(amount);
+            repository.save(account);
+        }
+    }
+    
+    public void withdraw(Long accountId, double amount) {
+        Optional<BankAccount> accountOpt = repository.findById(accountId);
+        if (accountOpt.isPresent()) {
+            BankAccount account = accountOpt.get();
+            account.withdraw(amount);
+            repository.save(account);
+        }
+    }
+}package ru.hse.bank.di;
+
+import ru.hse.bank.facade.BankAccountFacade;
+import ru.hse.bank.factory.DomainFactory;
+import ru.hse.bank.repository.BankAccountRepository;
+import ru.hse.bank.repository.BankAccountRepositoryImpl;
+
+import java.util.HashMap;
+import java.util.Map;
+
+public class DIContainer {
+    private final Map<Class<?>, Object> beans = new HashMap<>();
+    private final Map<Class<?>, Class<?>> implementations = new HashMap<>();
+    
+    public DIContainer() {
+        setupImplementations();
+        initializeBeans();
+    }
+    
+    private void setupImplementations() {
+        implementations.put(DomainFactory.class, DomainFactory.class);
+        implementations.put(BankAccountRepository.class, BankAccountRepository.class);
+        implementations.put(BankAccountFacade.class, BankAccountFacade.class);
+    }
+    
+    private void initializeBeans() {
+        // Создаем бины в правильном порядке зависимостей
+        DomainFactory factory = new DomainFactory();
+        BankAccountRepositoryImpl realRepository = new BankAccountRepositoryImpl();
+        BankAccountRepository repository = new BankAccountRepository(realRepository);
+        BankAccountFacade facade = new BankAccountFacade(repository, factory);
+        
+        beans.put(DomainFactory.class, factory);
+        beans.put(BankAccountRepository.class, repository);
+        beans.put(BankAccountFacade.class, facade);
+    }
+    
+    @SuppressWarnings("unchecked")
+    public <T> T getBean(Class<T> beanClass) {
+        Object bean = beans.get(beanClass);
+        if (bean == null) {
+            throw new IllegalArgumentException("Bean not found: " + beanClass.getName());
+        }
+        return (T) bean;
+    }
+}
+package ru.hse.bank.exporter;
+
+import ru.hse.bank.domain.BankAccount;
+import ru.hse.bank.domain.Category;
+import ru.hse.bank.domain.Operation;
+
+public interface DataVisitor {
+    void visit(BankAccount account);
+    void visit(Category category);
+    void visit(Operation operation);
+    String getResult();
+}package ru.hse.bank.exporter;
+
+import ru.hse.bank.domain.BankAccount;
+import ru.hse.bank.domain.Category;
+import ru.hse.bank.domain.Operation;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class JsonExportVisitor implements DataVisitor {
+    private final List<String> accountsJson = new ArrayList<>();
+    private final List<String> categoriesJson = new ArrayList<>();
+    private final List<String> operationsJson = new ArrayList<>();
+    
+    @Override
+    public void visit(BankAccount account) {
+        String json = String.format(
+            "{\"id\": %d, \"name\": \"%s\", \"balance\": %.2f}",
+            account.getId(), account.getName(), account.getBalance()
+        );
+        accountsJson.add(json);
+    }
+    
+    @Override
+    public void visit(Category category) {
+        String json = String.format(
+            "{\"id\": %d, \"type\": \"%s\", \"name\": \"%s\"}",
+            category.getId(), category.getType(), category.getName()
+        );
+        categoriesJson.add(json);
+    }
+    
+    @Override
+    public void visit(Operation operation) {
+        String json = String.format(
+            "{\"id\": %d, \"type\": \"%s\", \"amount\": %.2f, \"description\": \"%s\"}",
+            operation.getId(), operation.getType(), operation.getAmount(), 
+            operation.getDescription() != null ? operation.getDescription() : ""
+        );
+        operationsJson.add(json);
+    }
+    
+    @Override
+    public String getResult() {
+        return String.format(
+            "{\"accounts\": [%s], \"categories\": [%s], \"operations\": [%s]}",
+            String.join(", ", accountsJson),
+            String.join(", ", categoriesJson),
+            String.join(", ", operationsJson)
+        );
+    }
+}package ru.hse.bank.command;
+
+public class TimingDecorator implements Command {
+    private final Command command;
+    
+    public TimingDecorator(Command command) {
+        this.command = command;
+    }
+    
+    @Override
+    public void execute() {
+        long startTime = System.currentTimeMillis();
+        command.execute();
+        long endTime = System.currentTimeMillis();
+        System.out.printf("Команда '%s' выполнена за %d мс%n", 
+                         command.getName(), (endTime - startTime));
+    }
+    
+    @Override
+    public String getName() {
+        return command.getName() + " (с таймингом)";
+    }
+}package ru.hse.bank.command;
+
+public interface Command {
+    void execute();
+    String getName();
+}package ru.hse.bank.command;
+
+import ru.hse.bank.domain.BankAccount;
+import ru.hse.bank.facade.BankAccountFacade;
+
+public class CreateBankAccountCommand implements Command {
+    private final BankAccountFacade facade;
+    private final String name;
+    private final double initialBalance;
+    private BankAccount result;
+    
+    public CreateBankAccountCommand(BankAccountFacade facade, String name, double initialBalance) {
+        this.facade = facade;
+        this.name = name;
+        this.initialBalance = initialBalance;
+    }
+    
+    @Override
+    public void execute() {
+        result = facade.createAccount(name, initialBalance);
+        System.out.println("Создан счет: " + result.getName() + " с балансом: " + result.getBalance());
+    }
+    
+    @Override
+    public String getName() {
+        return "Создание банковского счета";
+    }
+    
+    public BankAccount getResult() {
+        return result;
+    }
+}package ru.hse.bank.observer;
+
+import ru.hse.bank.domain.BankAccount;
+
+public class LowBalanceObserver implements BalanceObserver {
+    private final double threshold;
+    
+    public LowBalanceObserver(double threshold) {
+        this.threshold = threshold;
+    }
+    
+    @Override
+    public void update(BankAccount account, double oldBalance, double newBalance) {
+        if (newBalance < threshold) {
+            System.out.printf("ВНИМАНИЕ: На счете '%s' низкий баланс: %.2f%n",
+                            account.getName(), newBalance);
+        }
+    }
+}package ru.hse.bank.observer;
+
+import ru.hse.bank.domain.BankAccount;
+
+public interface BalanceObserver {
+    void update(BankAccount account, double oldBalance, double newBalance);
+}package ru.hse.bank.domain;
+
+import java.util.concurrent.atomic.AtomicLong;
+
+public class BankAccount {
+    private static final AtomicLong ID_GENERATOR = new AtomicLong(1);
+    
+    private final Long id;
+    private String name;
+    private double balance;
+    
+    public BankAccount(String name, double initialBalance) {
+        this.id = ID_GENERATOR.getAndIncrement();
+        this.name = name;
+        this.balance = initialBalance;
+    }
+    
+    // Геттеры и сеттеры
+    public Long getId() { return id; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    public double getBalance() { return balance; }
+    public void setBalance(double balance) { this.balance = balance; }
+    
+    public void deposit(double amount) {
+        if (amount <= 0) {
+            throw new IllegalArgumentException("Сумма пополнения должна быть положительной");
+        }
+        this.balance += amount;
+    }
+    
+    public void withdraw(double amount) {
+        if (amount <= 0) {
+            throw new IllegalArgumentException("Сумма списания должна быть положительной");
+        }
+        if (amount > balance) {
+            throw new IllegalArgumentException("Недостаточно средств на счете");
+        }
+        this.balance -= amount;
+    }
+}package ru.hse.bank.domain;
+
+import ru.hse.bank.observer.BalanceObserver;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class ObservableBankAccount extends BankAccount {
+    private final List<BalanceObserver> observers = new ArrayList<>();
+    
+    public ObservableBankAccount(String name, double initialBalance) {
+        super(name, initialBalance);
+    }
+    
+    public void addObserver(BalanceObserver observer) {
+        observers.add(observer);
+    }
+    
+    public void removeObserver(BalanceObserver observer) {
+        observers.remove(observer);
+    }
+    
+    @Override
+    public void deposit(double amount) {
+        double oldBalance = getBalance();
+        super.deposit(amount);
+        notifyObservers(oldBalance, getBalance());
+    }
+    
+    @Override
+    public void withdraw(double amount) {
+        double oldBalance = getBalance();
+        super.withdraw(amount);
+        notifyObservers(oldBalance, getBalance());
+    }
+    
+    private void notifyObservers(double oldBalance, double newBalance) {
+        for (BalanceObserver observer : observers) {
+            observer.update(this, oldBalance, newBalance);
+        }
+    }
+}package ru.hse.bank.domain;
+
+public enum CategoryType {
+    INCOME, EXPENSE
+}package ru.hse.bank.domain;
+
+import java.time.LocalDateTime;
+import java.util.concurrent.atomic.AtomicLong;
+
+public class Operation {
+    private static final AtomicLong ID_GENERATOR = new AtomicLong(1);
+    
+    private final Long id;
+    private final OperationType type;
+    private final Long bankAccountId;
+    private final double amount;
+    private final LocalDateTime date;
+    private String description;
+    private final Long categoryId;
+    
+    public Operation(OperationType type, Long bankAccountId, double amount, 
+                    String description, Long categoryId) {
+        this.id = ID_GENERATOR.getAndIncrement();
+        this.type = type;
+        this.bankAccountId = bankAccountId;
+        this.amount = amount;
+        this.date = LocalDateTime.now();
+        this.description = description;
+        this.categoryId = categoryId;
+    }
+    
+    // Геттеры
+    public Long getId() { return id; }
+    public OperationType getType() { return type; }
+    public Long getBankAccountId() { return bankAccountId; }
+    public double getAmount() { return amount; }
+    public LocalDateTime getDate() { return date; }
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+    public Long getCategoryId() { return categoryId; }
+}package ru.hse.bank.domain;
+
+import java.util.concurrent.atomic.AtomicLong;
+
+public class Category {
+    private static final AtomicLong ID_GENERATOR = new AtomicLong(1);
+    
+    private final Long id;
+    private final CategoryType type;
+    private String name;
+    
+    public Category(CategoryType type, String name) {
+        this.id = ID_GENERATOR.getAndIncrement();
+        this.type = type;
+        this.name = name;
+    }
+    
+    // Геттеры
+    public Long getId() { return id; }
+    public CategoryType getType() { return type; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+}package ru.hse.bank.domain;
+
+public enum OperationType {
+    INCOME, EXPENSE
+}package ru.hse.bank.factory;
+
+import ru.hse.bank.domain.BankAccount;
+import ru.hse.bank.domain.ObservableBankAccount;
+import ru.hse.bank.domain.Category;
+import ru.hse.bank.domain.CategoryType;
+import ru.hse.bank.domain.Operation;
+import ru.hse.bank.domain.OperationType;
+
+public class DomainFactory {
+    
+    public BankAccount createBankAccount(String name, double initialBalance) {
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("Название счета не может быть пустым");
+        }
+        if (initialBalance < 0) {
+            throw new IllegalArgumentException("Начальный баланс не может быть отрицательным");
+        }
+        return new BankAccount(name, initialBalance);
+    }
+    
+    public Category createCategory(CategoryType type, String name) {
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("Название категории не может быть пустым");
+        }
+        return new Category(type, name);
+    }
+    
+    public Operation createOperation(OperationType type, Long bankAccountId, 
+                                   double amount, String description, Long categoryId) {
+        if (bankAccountId == null) {
+            throw new IllegalArgumentException("ID счета не может быть null");
+        }
+        if (amount <= 0) {
+            throw new IllegalArgumentException("Сумма операции должна быть положительной");
+        }
+        if (categoryId == null) {
+            throw new IllegalArgumentException("ID категории не может быть null");
+        }
+        
+        return new Operation(type, bankAccountId, amount, description, categoryId);
+    }
+    
+    public BankAccount createObservableBankAccount(String name, double initialBalance) {
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("Название счета не может быть пустым");
+        }
+        if (initialBalance < 0) {
+            throw new IllegalArgumentException("Начальный баланс не может быть отрицательным");
+        }
+        return new ObservableBankAccount(name, initialBalance);
+    }
+}

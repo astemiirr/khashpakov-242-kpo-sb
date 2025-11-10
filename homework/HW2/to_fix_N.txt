@@ -1,0 +1,18 @@
+protected final ConcurrentMap<ID, T> storage = new ConcurrentHashMap<>();     не нужно
+
+убрать смайлики, лишние выводы и комментарии
+
+public abstract class DataImporter   не используется: убрать или реализовать. например создать xml или json импортер который умеет парсить в доменные классы(можно использовать зависимости по типу jackson-а)
+
+убрать домен DIContainer и переписать с использованием Spring
+
+
+
+
+git add .
+git commit -m "comentary"
+
+git push
+git push origin HW2
+
+
