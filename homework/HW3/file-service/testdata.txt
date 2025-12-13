@@ -1,0 +1,2 @@
+Microservice architecture is a style of building applications as a set of independent services.
+Each service operates in its own process and interacts with other services through lightweight mechanisms.
