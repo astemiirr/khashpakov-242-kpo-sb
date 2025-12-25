@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: gateway
+  cloud:
+    gateway:
+      routes:
+        - id: order-service
+          uri: http://order-service:8080
+          predicates:
+            - Path=/orders/**
+        - id: payments-service
+          uri: http://payments-service:8080
+          predicates:
+            - Path=/payments/**
+        - id: order-api-docs
+          uri: http://order-service:8080
+          predicates:
+            - Path=/v3/api-docs/orders
+        - id: payments-api-docs
+          uri: http://payments-service:8080
+          predicates:
+            - Path=/v3/api-docs/payments
+springdoc:
+  swagger-ui:
+    urls:
+      - url: "/v3/api-docs/orders"
+        name: "Orders Microservice"
+      - url: "/v3/api-docs/payments"
+        name: "Payments Microservice"
+    enabled: true
+server:
+  port: 8080
+logging:
+  level:
+    root: debug
